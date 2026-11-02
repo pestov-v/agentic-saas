@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
 import { createObserveModule } from "@nestjs/observe";
 import { AgentModule } from "./agent/agent.module.js";
 import { AppController } from "./app.controller.js";
@@ -15,6 +16,10 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     //   appSecret: 'YOUR_APP_SECRET',
     //   serviceId: 'api',
     // }),
+    ConfigModule.forRoot({
+      isGlobal: true, // робить змінні доступними у всіх модулях без потреби імпортувати ConfigModule знову
+      envFilePath: ".env", // за замовчуванням NestJS шукає .env в корені запуску
+    }),
     AgentModule,
   ],
   controllers: [AppController],

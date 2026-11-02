@@ -7,6 +7,7 @@
 // import { ChatOllama } from "@langchain/ollama";
 import { Injectable, Logger } from "@nestjs/common";
 import { buildInvoiceGraph } from "./graph/agent.graph.js";
+import { Observable, Subject } from "rxjs";
 // import { searchClientTool } from "./tools/client.tool.js";
 // import { sendEmailTool } from "./tools/email.tool.js";
 // import { createInvoiceTool } from "./tools/invoice.tool.js";
@@ -114,5 +115,53 @@ export class AgentService {
       success: true,
       response: finalState.finalResponse,
     };
+  }
+
+  streamTask(userPrompt: string): Observable<MessageEvent> {
+    const subject = new Subject<MessageEvent>();
+
+    (async () => {
+      try {
+        this.logger.log(`[STARTGRAPH STREAM]: ${userPrompt}`);
+
+        const initialState = { userPrompt };
+
+        const stream = await this.graph.stream(initialState, {
+          streamMode: "updates",
+        });
+
+        for await (const update of stream) {
+          const nodeName = Object.keys(update)[0];
+          const nodeOutput = (update as Record<string, any>)[nodeName];
+
+          this.logger.log(`[STREAM NODE COMPLETED]: ${nodeName}`);
+
+          subject.next({
+            data: JSON.stringify({
+              node: nodeName,
+              status: nodeOutput.error ? "error" : "completed",
+              output: nodeOutput,
+            }),
+          } as MessageEvent);
+        }
+
+        subject.next({
+          data: JSON.stringify({ isFinished: true }),
+        } as MessageEvent);
+        subject.complete();
+      } catch (error) {
+        const err = error as Error;
+        subject.next({
+          data: JSON.stringify({
+            node: "system",
+            status: "error",
+            error: err.message,
+          }),
+        } as MessageEvent);
+        subject.complete();
+      }
+    })();
+
+    return subject.asObservable();
   }
 }

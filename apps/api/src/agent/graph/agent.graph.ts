@@ -1,5 +1,6 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
 import { ChatOllama } from "@langchain/ollama";
+import { GRAPH_NODE_NAMES } from "@repo/shared";
 import { searchClientTool } from "../tools/client.tool.js";
 import { sendEmailTool } from "../tools/email.tool.js";
 import { createInvoiceTool } from "../tools/invoice.tool.js";
@@ -90,13 +91,19 @@ async function createInvoiceNode(state: AgentState) {
   console.log("[GRAPH NODE]: createInvoiceNode for clientId:", state.clientId);
 
   if (!state.clientId) {
-    throw new Error("Не знайдено clientId");
+    return {
+      error: "Не знайдено clientId",
+    };
   }
   if (!state.amount || state.amount === 0) {
-    throw new Error("Не знайдено amount");
+    return {
+      error: "Не знайдено amount",
+    };
   }
   if (!state.description || state.description === "") {
-    throw new Error("Не знайдено description");
+    return {
+      error: "Не знайдено description",
+    };
   }
 
   try {
@@ -136,10 +143,14 @@ async function sendEmailNode(state: AgentState) {
   );
 
   if (!state.clientEmail) {
-    throw new Error("Не знайдено clientEmail");
+    return {
+      error: "Не знайдено clientEmail",
+    };
   }
   if (!state.invoiceId) {
-    throw new Error("Не знайдено invoiceId");
+    return {
+      error: "Не знайдено invoiceId",
+    };
   }
 
   try {
@@ -163,7 +174,7 @@ async function sendEmailNode(state: AgentState) {
 }
 
 function checkStepError(state: AgentState) {
-  if (state.error) return "handle_error";
+  if (state.error) return GRAPH_NODE_NAMES.HANDLE_ERROR;
   return "continue";
 }
 
@@ -178,35 +189,28 @@ async function handleErrorNode(state: AgentState) {
 // ─── ЗБИРАЄМО ГРАФ ──────────────────────────────────────────────
 export function buildInvoiceGraph() {
   const workflow = new StateGraph(AgentStateAnnotation)
-    .addNode("extract_intent", extractIntentNode)
-    .addNode("search_client", searchClientNode)
-    .addNode("create_invoice", createInvoiceNode)
-    .addNode("send_email", sendEmailNode)
-    .addNode("handle_error", handleErrorNode)
+    .addNode(GRAPH_NODE_NAMES.EXTRACT_INTENT, extractIntentNode)
+    .addNode(GRAPH_NODE_NAMES.SEARCH_CLIENT, searchClientNode)
+    .addNode(GRAPH_NODE_NAMES.CREATE_INVOICE, createInvoiceNode)
+    .addNode(GRAPH_NODE_NAMES.SEND_EMAIL, sendEmailNode)
+    .addNode(GRAPH_NODE_NAMES.HANDLE_ERROR, handleErrorNode)
 
-    .addEdge(START, "extract_intent")
+    .addEdge(START, GRAPH_NODE_NAMES.EXTRACT_INTENT)
 
-    .addConditionalEdges("extract_intent", checkStepError, {
-      continue: "search_client",
-      handle_error: "handle_error",
+    .addConditionalEdges(GRAPH_NODE_NAMES.EXTRACT_INTENT, checkStepError, {
+      continue: GRAPH_NODE_NAMES.SEARCH_CLIENT,
+      handle_error: GRAPH_NODE_NAMES.HANDLE_ERROR,
     })
-    .addConditionalEdges("search_client", checkStepError, {
-      continue: "create_invoice",
-      handle_error: "handle_error",
+    .addConditionalEdges(GRAPH_NODE_NAMES.SEARCH_CLIENT, checkStepError, {
+      continue: GRAPH_NODE_NAMES.CREATE_INVOICE,
+      handle_error: GRAPH_NODE_NAMES.HANDLE_ERROR,
     })
-    .addConditionalEdges("create_invoice", checkStepError, {
-      continue: "send_email",
-      handle_error: "handle_error",
+    .addConditionalEdges(GRAPH_NODE_NAMES.CREATE_INVOICE, checkStepError, {
+      continue: GRAPH_NODE_NAMES.SEND_EMAIL,
+      handle_error: GRAPH_NODE_NAMES.HANDLE_ERROR,
     })
-    // .addConditionalEdges("send_email", checkStepError, {
-    // 	continue: END,
-    // 	"handle_error": "handle_error",
-    // });
-
-    // .addEdge("search_client", "create_invoice")
-    // .addEdge("create_invoice", "send_email")
-    .addEdge("send_email", END)
-    .addEdge("handle_error", END);
+    .addEdge(GRAPH_NODE_NAMES.SEND_EMAIL, END)
+    .addEdge(GRAPH_NODE_NAMES.HANDLE_ERROR, END);
 
   return workflow.compile();
 }
